@@ -14,10 +14,19 @@ if (!MOTHERDUCK_TOKEN) {
 let connection;
 let queue = Promise.resolve();
 
+// Binds params by JS type (string -> VARCHAR, number -> INTEGER) using the
+// typed bind methods required by @duckdb/node-api 1.5.x, then runs the query.
 function runQuery(sql, params = []) {
   queue = queue.then(async () => {
     const prepared = await connection.prepare(sql);
-    params.forEach((p, i) => prepared.bind(i + 1, p));
+    params.forEach((p, i) => {
+      const idx = i + 1;
+      if (typeof p === 'number') {
+        prepared.bindInteger(idx, p);
+      } else {
+        prepared.bindVarchar(idx, String(p));
+      }
+    });
     const reader = await prepared.runAndReadAll();
     return reader.getRowObjects();
   });
@@ -67,7 +76,7 @@ app.post('/api/scores', async (req, res) => {
     score = Math.max(0, Math.round(score));
 
     await runQuery(
-      `INSERT INTO leaderboard (player_name, score, mode) VALUES (?, ?, ?);`,
+      `INSERT INTO leaderboard (player_name, score, mode) VALUES ($1, $2, $3);`,
       [name, score, mode]
     );
 
@@ -90,9 +99,9 @@ app.get('/api/leaderboard', async (req, res) => {
     const rows = await runQuery(
       `SELECT player_name, score, created_at
        FROM leaderboard
-       WHERE mode = ?
+       WHERE mode = $1
        ORDER BY score DESC, created_at ASC
-       LIMIT ?;`,
+       LIMIT $2;`,
       [mode, limit]
     );
 
