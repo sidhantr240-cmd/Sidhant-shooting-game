@@ -53,6 +53,7 @@ async function initDb() {
 }
 
 const app = express();
+app.disable('etag'); // avoid 304 caching responses that can confuse fetch() on the client
 app.use(cors());
 app.use(express.json());
 
